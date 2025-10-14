@@ -3,6 +3,17 @@
 
 ---
 
+<p align="center">
+  <img src="https://img.shields.io/badge/JavaScript-ES6+-yellow?logo=javascript" alt="JavaScript"/>
+  <img src="https://img.shields.io/badge/Google%20Apps%20Script-API-blue?logo=google" alt="Google Apps Script"/>
+  <img src="https://img.shields.io/badge/Versão-8.7-green" alt="Versão 8.7"/>
+  <img src="https://img.shields.io/badge/Licença-CC%20BY%204.0-lightgrey?logo=creativecommons" alt="Licença CC BY 4.0"/>
+  <img src="https://img.shields.io/badge/INPI-AD04%20%7C%20FA03-orange" alt="Classificação INPI"/>
+  <img src="https://img.shields.io/badge/Grupo-ObservaGP-blueviolet" alt="ObservaGP"/>
+</p>
+
+---
+
 ## 🧩 Descrição Geral
 
 A **Matriz de Gerenciamento de Projetos** é um sistema desenvolvido em **JavaScript / Google Apps Script** para automatizar a integração entre **Google Planilhas** e **Google Agenda**, permitindo a **sincronização bidirecional de eventos**, **gerenciamento de tarefas e prazos**, e **visualização dinâmica no formato de gráfico de Gantt**.
@@ -189,11 +200,25 @@ Distribuído com fins de **pesquisa, inovação e extensão acadêmica**.
 
 ---
 
+## 🧾 Como Citar Este Projeto
+
+Se você utilizar este software em trabalhos acadêmicos, técnicos ou institucionais, **por favor, cite-o adequadamente**.  
+O GitHub gera automaticamente as citações em formato **APA** e **BibTeX** com base no arquivo `CITATION.cff`.
+
+> 🧭 **Para citar:**  
+> Clique no menu à direita, em **About → Cite this repository**  
+> e copie o formato desejado (APA ou BibTeX).
+
+📘 **Exemplo de citação (APA):**  
+> Gianordoli, V., & Dias, T. de L. (2025). *Matriz de Gerenciamento de Projetos com Sincronização Bidirecional com Agenda Online (Versão 8.7)* [Computer software]. IFES/UFES. https://github.com/ObservaGP/matriz_gerenciamento_de_projetos
+
+---
+
 ## 📬 Contato
 
 Para dúvidas, colaborações e solicitações de uso institucional:
 
-- 🧑‍🏫 ObservaGP - Grupo de Pesquisa do Observatório de Gestão Pública
+- 🧑‍🏫 ObservaGP - Grupo de Pesquisa do Observatório de Gestão Pública  
 - 🌐 http://dgp.cnpq.br/dgp/espelhogrupo/3101388046828956  
 
 ---
