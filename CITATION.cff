@@ -13,6 +13,7 @@ authors:
 version: "8.7"
 date-released: 2025-09-16
 license: "CC-BY-4.0"
+doi: "10.5281/zenodo.17353809"   # <--- DOI atual
 keywords:
   - Google Apps Script
   - JavaScript
@@ -37,5 +38,5 @@ preferred-citation:
       given-names: Taciana de Lemos
   year: 2025
   version: "8.7"
-  url: "https://github.com/ObservaGP/matriz_gerenciamento_de_projetos"
+  url: "https://doi.org/10.5281/zenodo.17353809"
 
