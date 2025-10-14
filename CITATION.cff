@@ -1,0 +1,41 @@
+cff-version: 1.2.0
+message: "Se você utilizar este software em sua pesquisa, por favor cite conforme os metadados abaixo."
+title: "Matriz de Gerenciamento de Projetos com Sincronização Bidirecional com Agenda Online"
+authors:
+  - family-names: Gianordoli
+    given-names: Victor
+    affiliation: Instituto Federal do Espírito Santo (IFES)
+    orcid: "https://orcid.org/0000-0001-5905-0641"
+  - family-names: Dias
+    given-names: Taciana de Lemos
+    affiliation: Universidade Federal do Espírito Santo (UFES)
+    orcid: "https://orcid.org/0000-0002-7172-1230"
+version: "8.7"
+date-released: 2025-09-16
+license: "CC-BY-4.0"
+keywords:
+  - Google Apps Script
+  - JavaScript
+  - Gestão de Projetos
+  - Administração Pública
+  - Planilha Eletrônica
+  - Sincronização Bidirecional
+  - ObservaGP
+repository-code: "https://github.com/ObservaGP/matriz_gerenciamento_de_projetos"
+type: software
+abstract: >
+  Sistema em JavaScript / Google Apps Script para integração e sincronização bidirecional entre Google Planilhas e Google Agenda.
+  Permite o gerenciamento de projetos, acompanhamento de prazos e visualização dinâmica de Gantt.
+  Desenvolvido no âmbito do Grupo de Pesquisa ObservaGP (IFES/UFES), registrado no INPI sob classificação AD04/FA03.
+preferred-citation:
+  type: software
+  title: "Matriz de Gerenciamento de Projetos com Sincronização Bidirecional com Agenda Online"
+  authors:
+    - family-names: Gianordoli
+      given-names: Victor
+    - family-names: Dias
+      given-names: Taciana de Lemos
+  year: 2025
+  version: "8.7"
+  url: "https://github.com/ObservaGP/matriz_gerenciamento_de_projetos"
+
