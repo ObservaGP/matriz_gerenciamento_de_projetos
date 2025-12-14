@@ -1,6 +1,5 @@
 /**
  * * MATRIZ DE GERENCIAMENTO DE PROJETOS COM SINCRONIZAÇÃO BIDIRECIONAL COM AGENDA ONLINE - VERSÃO 8.9 - 14/12/2025
- * Versão 8.7 — 16/09/2025
  *
  * ------------------------------------------------------------------------
  * LICENÇA E REGISTRO
