@@ -1,5 +1,5 @@
 /**
- * MATRIZ DE GERENCIAMENTO DE PROJETOS COM SINCRONIZAÇÃO BIDIRECIONAL COM AGENDA ONLINE
+ * * MATRIZ DE GERENCIAMENTO DE PROJETOS COM SINCRONIZAÇÃO BIDIRECIONAL COM AGENDA ONLINE - VERSÃO 8.9 - 14/12/2025
  * Versão 8.7 — 16/09/2025
  *
  * ------------------------------------------------------------------------
@@ -54,6 +54,11 @@ const THROTTLE_SLEEP_MS  = 100;  // Ajustável conforme necessidade
 const NO_SYNC_STRING     = "NOSYNC";
 // Duração padrão (minutos) quando o início tem hora e o fim está vazio
 const DEFAULT_TIMED_DURATION_MIN = 60;
+
+// Limite de criação para evitar rate limit do CalendarApp
+const CREATE_BATCH_SIZE = 125;
+const CREATE_BATCH_SLEEP_MS = 15000;
+
 
 // Coluna de sincronização (A=1, B=2, C=3 são ignoradas; usamos a partir de D=4)
 const SYNC_START_COL     = 4;
@@ -472,6 +477,22 @@ function syncToCalendar() {
   let rowsChanged = false;
   const updatedData = [headerRow];
 
+  // === Controle de lote para evitar "muitas entradas de uma vez" ===
+  let createdInBatch = 0;
+
+  function isRateLimitError(err) {
+    const msg = (err && err.message) ? err.message.toString() : '';
+    return /many|quota|rate|temporar|try again|invoked too many times/i.test(msg);
+  }
+
+  function sleepBetweenBatchesIfNeeded() {
+    if (createdInBatch >= CREATE_BATCH_SIZE) {
+      Utilities.sleep(CREATE_BATCH_SLEEP_MS);
+      createdInBatch = 0;
+    }
+  }
+
+
   for (let i = 1; i < allData.length; i++) {
     const row = allData[i];
     const sheetId = row[idIdx];
@@ -592,28 +613,44 @@ function syncToCalendar() {
       const hasStartTime = sheetEvent.starttime && !isDateOnly(sheetEvent.starttime);
       const hasEndTime   = sheetEvent.endtime && !isDateOnly(sheetEvent.endtime);
 
-      if (!sheetEvent.endtime && !hasStartTime) {
-        // dia-inteiro 1 dia
-        newEv = cal.createAllDayEvent(sheetEvent.title, normalizeDateOnly(sheetEvent.starttime));
-      } else if (startOnly && endOnly) {
-        // dia-inteiro multi (fim inclusivo na planilha → exclusivo na Agenda)
-        newEv = cal.createAllDayEvent(
-          sheetEvent.title,
-          normalizeDateOnly(sheetEvent.starttime),
-          addDays(sheetEvent.endtime, 1)
-        );
-      } else {
-        // evento com hora (se fim vazio, usar duração padrão)
-        const startEff = hasStartTime ? sheetEvent.starttime : new Date(sheetEvent.starttime.getFullYear(), sheetEvent.starttime.getMonth(), sheetEvent.starttime.getDate(), 0, 0, 0);
-        const endEff   = sheetEvent.endtime
-          ? sheetEvent.endtime
-          : new Date(startEff.getTime() + DEFAULT_TIMED_DURATION_MIN * 60000);
-        newEv = cal.createEvent(sheetEvent.title, startEff, endEff);
+      // Tenta criar; se bater rate limit, espera 15s e tenta mais 1x
+      const tryCreate = () => {
+        if (!sheetEvent.endtime && !hasStartTime) {
+          return cal.createAllDayEvent(sheetEvent.title, normalizeDateOnly(sheetEvent.starttime));
+        } else if (startOnly && endOnly) {
+          return cal.createAllDayEvent(
+            sheetEvent.title,
+            normalizeDateOnly(sheetEvent.starttime),
+            addDays(sheetEvent.endtime, 1)
+          );
+        } else {
+          const startEff = hasStartTime
+            ? sheetEvent.starttime
+            : new Date(sheetEvent.starttime.getFullYear(), sheetEvent.starttime.getMonth(), sheetEvent.starttime.getDate(), 0, 0, 0);
+
+          const endEff = sheetEvent.endtime
+            ? sheetEvent.endtime
+            : new Date(startEff.getTime() + DEFAULT_TIMED_DURATION_MIN * 60000);
+
+          return cal.createEvent(sheetEvent.title, startEff, endEff);
+        }
+      };
+
+      try {
+        newEv = tryCreate();
+      } catch (err) {
+        if (isRateLimitError(err)) {
+          Utilities.sleep(CREATE_BATCH_SLEEP_MS);
+          newEv = tryCreate(); // retry 1x
+        } else {
+          throw err;
+        }
       }
 
       if (sheetEvent.color && sheetEvent.color >= 1 && sheetEvent.color <= 11) {
         newEv.setColor('' + sheetEvent.color);
       }
+
       const newId  = newEv.getId();
       const nowTs  = new Date().toISOString();
       row[idIdx]   = newId;
@@ -622,7 +659,8 @@ function syncToCalendar() {
       updatedData.push(row);
       rowsChanged = true;
 
-      if (i % 10 === 0) Utilities.sleep(THROTTLE_SLEEP_MS);
+      createdInBatch++;
+      sleepBetweenBatchesIfNeeded();
     }
   }
 
@@ -1025,20 +1063,39 @@ function createEventsWithPrompts() {
   const dates  = lastRow >= 2 ? sheet.getRange(2, SYNC_START_COL + iStart, lastRow - 1, 1).getValues().flat() : [];
   const existingSet = new Set();
   if (lastRow >= 2) {
-    const tz = sheet.getParent().getSpreadsheetTimeZone();
-    titles.forEach((t, i) => {
-      if (t && t.toString().startsWith('- ')) {
-        const cell = dates[i];
-        const dateStr = (cell instanceof Date)
-          ? Utilities.formatDate(cell, tz, 'dd/MM/yy')
-          : (cell || '');
-        existingSet.add(dateStr + '|' + t.toString().substring(2));
-      }
-    });
+    for (let i = 0; i < titles.length; i++) {
+      const t = titles[i];
+      if (!t) continue;
+
+      const tStr = t.toString().trim();
+      if (!tStr.startsWith('-')) continue;
+
+      const name = normDayName(tStr);
+      if (!name) continue;
+
+      const dk = toKeyDate(dates[i]);
+      if (dk) existingSet.add(makeKey(dk, name));
+    }
   }
 
   const tz    = sheet.getParent().getSpreadsheetTimeZone();
   const names = { 1:'Segunda', 2:'Terça', 3:'Quarta', 4:'Quinta', 5:'Sexta', 6:'Sábado', 0:'Domingo' };
+
+  function normDayName(titleCell) {
+    if (!titleCell) return '';
+    return titleCell.toString().replace(/^\s*-\s*/,'').trim();
+  }
+
+  function toKeyDate(cell) {
+    const d = (cell instanceof Date) ? cell : getDateValue((cell || '').toString());
+    if (!(d instanceof Date) || isNaN(d.getTime())) return '';
+    return Utilities.formatDate(d, tz, 'yyyy-MM-dd');
+  }
+
+  function makeKey(dateKey, name) {
+    return dateKey + '|' + (name || '').trim();
+  }
+
 
   const rowsToInsert = [];
   const templateRow = new Array(hdr.length).fill('');
@@ -1047,14 +1104,21 @@ function createEventsWithPrompts() {
   while (cur <= endDate) {
     const w = cur.getDay();
     if (names.hasOwnProperty(w)) {
-      const name    = names[w];
-      const dateStr = Utilities.formatDate(cur, tz, 'dd/MM/yy');
-      if (!existingSet.has(dateStr + '|' + name)) {
+      const name = names[w];
+      const dk   = Utilities.formatDate(cur, tz, 'yyyy-MM-dd');
+
+      if (!existingSet.has(makeKey(dk, name))) {
         const newRow = templateRow.slice();
         newRow[iTitle] = '- ' + name;
-        newRow[iStart] = dateStr;
+
+        // grava como Date (numérico) para manter padrão de coluna de data
+        newRow[iStart] = new Date(cur.getFullYear(), cur.getMonth(), cur.getDate());
+
         newRow[iColor] = 8;
         rowsToInsert.push(newRow);
+
+        // evita duplicar no mesmo batch
+        existingSet.add(makeKey(dk, name));
       }
     }
     cur.setDate(cur.getDate() + 1);
