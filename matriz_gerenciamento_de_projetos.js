@@ -1,5 +1,5 @@
 /**
- * * MATRIZ DE GERENCIAMENTO DE PROJETOS COM SINCRONIZAÇÃO BIDIRECIONAL COM AGENDA ONLINE - VERSÃO 8.9 - 14/12/2025
+ * MATRIZ DE GERENCIAMENTO DE PROJETOS COM SINCRONIZAÇÃO BIDIRECIONAL COM AGENDA ONLINE - VERSÃO 8.9 - 14/12/2025
  *
  * ------------------------------------------------------------------------
  * LICENÇA E REGISTRO
@@ -224,7 +224,7 @@ function onEdit(e) {
   if (archIdx !== -1 && col === SYNC_START_COL + archIdx && (e.value === true || e.value === 'TRUE')) {
     const lock = LockService.getDocumentLock(); // lock em nível de arquivo
     try {
-      lock.waitLock(30000); // espera se houver outro clique em processamento
+      lock.waitLock(1000); // espera se houver outro clique em processamento (30000 mostrana mensagem "Processando" sem sumir)
       processArchiveSelections(); // processa sempre
     } finally {
       lock.releaseLock();
@@ -948,7 +948,6 @@ function onOpen() {
     .addItem('Sincronizar Agenda e Planilha', 'syncCalendarAndSheet')
     .addSubMenu(
       ui.createMenu('Outras opções')
-        .addItem('Criar Sequência de Dias na Planilha Gantt', 'gerarCabecalhoGantt') // se não existir, remova essa linha do menu
         .addItem('Criar Sequência de Dias na Planilha AGENDA', 'createEventsWithPrompts')
         .addItem('Apagar Sequência de Dias Úteis e Finais de Semana na Planilha AGENDA', 'deleteEventsWithPrompts')
         .addItem('Apagar Todos os Eventos em um intervalo na Planilha AGENDA', 'deleteAllEventsWithPrompts')
@@ -1031,7 +1030,8 @@ function syncCalendarAndSheet() {
 }
 
 // ======================
-// Criar sequência de dias (sem índices fixos)
+// Criar sequência de dias (sem índices fixos) - CORRIGIDA
+// (evita "Processando" quando lastRow está inflado por validações/checkbox/formatos)
 // ======================
 function createEventsWithPrompts() {
   const ui = SpreadsheetApp.getUi();
@@ -1050,18 +1050,52 @@ function createEventsWithPrompts() {
   const sheet = getSheet(SHEET_EVENTS);
   if (!sheet) throw new Error('Aba "' + SHEET_EVENTS + '" não encontrada.');
 
-  const lastRow = sheet.getLastRow();
   const hdr = sheet.getRange(1, SYNC_START_COL, 1, sheet.getLastColumn() - SYNC_START_COL + 1).getValues()[0];
 
   const iTitle = hdr.indexOf('Título');
   const iStart = hdr.indexOf('Data e Hora de Início');
   const iColor = hdr.indexOf('Cor');
-  if ([iTitle,iStart,iColor].some(i => i < 0)) throw new Error('Cabeçalhos esperados não encontrados.');
+  if ([iTitle, iStart, iColor].some(i => i < 0)) throw new Error('Cabeçalhos esperados não encontrados.');
 
-  const titles = lastRow >= 2 ? sheet.getRange(2, SYNC_START_COL + iTitle, lastRow - 1, 1).getValues().flat() : [];
-  const dates  = lastRow >= 2 ? sheet.getRange(2, SYNC_START_COL + iStart, lastRow - 1, 1).getValues().flat() : [];
+  const colTitleAbs = SYNC_START_COL + iTitle;
+  const colStartAbs = SYNC_START_COL + iStart;
+
+  // Usa "última linha com dado real" (evita lastRow inflado por validações/checkboxes/formatações)
+  const maxRows = sheet.getMaxRows();
+  const lastTitleRow = sheet.getRange(maxRows, colTitleAbs)
+    .getNextDataCell(SpreadsheetApp.Direction.UP).getRow();
+  const lastStartRow = sheet.getRange(maxRows, colStartAbs)
+    .getNextDataCell(SpreadsheetApp.Direction.UP).getRow();
+
+  const lastDataRow = Math.max(1, lastTitleRow, lastStartRow);
+
+  const tz = sheet.getParent().getSpreadsheetTimeZone();
+
+  const titles = (lastDataRow >= 2)
+    ? sheet.getRange(2, colTitleAbs, lastDataRow - 1, 1).getValues().flat()
+    : [];
+  const dates = (lastDataRow >= 2)
+    ? sheet.getRange(2, colStartAbs, lastDataRow - 1, 1).getValues().flat()
+    : [];
+
   const existingSet = new Set();
-  if (lastRow >= 2) {
+
+  function normDayName(titleCell) {
+    if (!titleCell) return '';
+    return titleCell.toString().replace(/^\s*-\s*/, '').trim();
+  }
+
+  function toKeyDate(cell) {
+    const d = (cell instanceof Date) ? cell : getDateValue((cell || '').toString());
+    if (!(d instanceof Date) || isNaN(d.getTime())) return '';
+    return Utilities.formatDate(d, tz, 'yyyy-MM-dd');
+  }
+
+  function makeKey(dateKey, name) {
+    return dateKey + '|' + (name || '').trim();
+  }
+
+  if (lastDataRow >= 2) {
     for (let i = 0; i < titles.length; i++) {
       const t = titles[i];
       if (!t) continue;
@@ -1077,24 +1111,7 @@ function createEventsWithPrompts() {
     }
   }
 
-  const tz    = sheet.getParent().getSpreadsheetTimeZone();
   const names = { 1:'Segunda', 2:'Terça', 3:'Quarta', 4:'Quinta', 5:'Sexta', 6:'Sábado', 0:'Domingo' };
-
-  function normDayName(titleCell) {
-    if (!titleCell) return '';
-    return titleCell.toString().replace(/^\s*-\s*/,'').trim();
-  }
-
-  function toKeyDate(cell) {
-    const d = (cell instanceof Date) ? cell : getDateValue((cell || '').toString());
-    if (!(d instanceof Date) || isNaN(d.getTime())) return '';
-    return Utilities.formatDate(d, tz, 'yyyy-MM-dd');
-  }
-
-  function makeKey(dateKey, name) {
-    return dateKey + '|' + (name || '').trim();
-  }
-
 
   const rowsToInsert = [];
   const templateRow = new Array(hdr.length).fill('');
@@ -1104,19 +1121,15 @@ function createEventsWithPrompts() {
     const w = cur.getDay();
     if (names.hasOwnProperty(w)) {
       const name = names[w];
-      const dk   = Utilities.formatDate(cur, tz, 'yyyy-MM-dd');
+      const dk = Utilities.formatDate(cur, tz, 'yyyy-MM-dd');
 
       if (!existingSet.has(makeKey(dk, name))) {
         const newRow = templateRow.slice();
         newRow[iTitle] = '- ' + name;
-
-        // grava como Date (numérico) para manter padrão de coluna de data
-        newRow[iStart] = new Date(cur.getFullYear(), cur.getMonth(), cur.getDate());
-
+        newRow[iStart] = new Date(cur.getFullYear(), cur.getMonth(), cur.getDate()); // Date-only
         newRow[iColor] = 8;
         rowsToInsert.push(newRow);
 
-        // evita duplicar no mesmo batch
         existingSet.add(makeKey(dk, name));
       }
     }
@@ -1124,11 +1137,20 @@ function createEventsWithPrompts() {
   }
 
   if (rowsToInsert.length) {
-    sheet.getRange(lastRow + 1, SYNC_START_COL, rowsToInsert.length, hdr.length).setValues(rowsToInsert);
+    const insertAt = Math.max(2, lastDataRow + 1);
+    sheet.getRange(insertAt, SYNC_START_COL, rowsToInsert.length, hdr.length).setValues(rowsToInsert);
     customSortSheet();
   }
 
-  ui.alert(`Operação concluída: ${rowsToInsert.length} linha(s) adicionada(s).`);
+  // Força gravações pendentes e mostra aviso do F5 (não recarrega automaticamente)
+  SpreadsheetApp.flush();
+  SpreadsheetApp.getActiveSpreadsheet().toast(
+    'Concluído. Se ficar “Processando…”, aperte F5 para atualizar a página.',
+    'Matriz',
+    8
+  );
+
+  ui.alert(`Operação concluída: ${rowsToInsert.length} linha(s) adicionada(s).\n\nSe a tela ficar “Processando…”, aperte F5.`);
 }
 
 // ======================
